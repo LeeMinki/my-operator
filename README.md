@@ -126,7 +126,7 @@ operator-sdk create api --group databases --version v1 --kind DatabaseBackup --r
   * 예: `databases` 그룹은 데이터베이스 관련 리소스를 그룹화하는 데 사용
     * `apiVersion: databases.test.io/v1`
 
-* `--version v1`:
+* `--version v1`
   * **API 버전**: CRD의 버전을 정의
   * 일반적으로 `v1alpha1`, `v1beta1`, `v1` 등의 형태로 사용
   * 예: `v1`은 안정적인 첫 번째 버전을 의미
@@ -136,11 +136,11 @@ operator-sdk create api --group databases --version v1 --kind DatabaseBackup --r
   * CRD의 `kind` 필드에 사용
   * 예: `DatabaseBackup`은 데이터베이스 백업을 나타내는 리소스
 
-* `--resource`:
+* `--resource`
   * **리소스 생성 플래그**: 이 플래그를 사용하면 CRD 스키마와 관련 코드가 생성됨
   * 이 플래그를 설정하면 `api/v1/databasebackup_types.go` 파일이 생성됨
 
-* `--controller`:
+* `--controller`
   * **컨트롤러 생성 플래그**: 이 플래그를 사용하면 리소스를 관리하는 컨트롤러 코드가 생성됨
   * 이 플래그를 설정하면 `controllers/databasebackup_controller.go` 파일이 생성됨
 
