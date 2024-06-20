@@ -418,10 +418,12 @@ type DatabaseBackupStatus struct {
     InProgress     bool        `json:"inProgress,omitempty"`
 }
 
-// +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
-
-
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
+//+kubebuilder:resource:shortName=dbb
+//+kubebuilder:printcolumn:name="Database",type=string,JSONPath=".spec.databaseName",description="The name of the database"
+//+kubebuilder:printcolumn:name="Schedule",type=string,JSONPath=".spec.schedule",description="Backup schedule"
+//+kubebuilder:printcolumn:name="Last Backup",type=date,JSONPath=".status.lastBackupTime",description="The last time the backup was run"
 
 // DatabaseBackup은 DatabaseBackup API의 스키마
 type DatabaseBackup struct {
@@ -667,9 +669,9 @@ kubectl apply -f config/samples/databases_v1_databasebackup.yaml
 * `DatabaseBackup` 리소스가 생성되고, 오퍼레이터가 이를 관리하는지 확인
 
 ```bash
-kubectl get databasebackups -o custom-columns=NAME:.metadata.name,DATABASE:.spec.databaseName,SCHEDULE:.spec.schedule,LAST_BACKUP:.status.lastBackupTime
-NAME                    DATABASE     SCHEDULE      LAST_BACKUP
-databasebackup-sample   example-db   */5 * * * *   2024-06-20T08:17:52Z
+kubectl get databasebackups
+NAME                    DATABASE     SCHEDULE      LAST BACKUP
+databasebackup-sample   example-db   */5 * * * *   22s
 ```
 
 ##### 생성된 `DatabaseBackup` 리소스의 상태를 확인
