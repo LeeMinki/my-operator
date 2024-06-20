@@ -1,0 +1,14 @@
+apiVersion: databases.test.io/v1
+kind: DatabaseBackup
+metadata:
+  labels:
+    app.kubernetes.io/name: databasebackup
+    app.kubernetes.io/instance: databasebackup-sample
+    app.kubernetes.io/part-of: my-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: my-operator
+  name: databasebackup-sample
+spec:
+  databaseName: "example-db"
+  schedule: "*/5 * * * *"
+  backupPath: "/backups/example-db"

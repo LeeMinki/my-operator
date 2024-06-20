@@ -1,0 +1,18 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: my-operator-manager-role
+rules:
+  - apiGroups:
+      - databases.test.io
+    resources:
+      - databasebackups
+      - databasebackups/status
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
