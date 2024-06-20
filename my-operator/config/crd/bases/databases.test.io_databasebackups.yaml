@@ -11,10 +11,25 @@ spec:
     kind: DatabaseBackup
     listKind: DatabaseBackupList
     plural: databasebackups
+    shortNames:
+    - dbb
     singular: databasebackup
   scope: Namespaced
   versions:
-  - name: v1
+  - additionalPrinterColumns:
+    - description: The name of the database
+      jsonPath: .spec.databaseName
+      name: Database
+      type: string
+    - description: Backup schedule
+      jsonPath: .spec.schedule
+      name: Schedule
+      type: string
+    - description: The last time the backup was run
+      jsonPath: .status.lastBackupTime
+      name: Last Backup
+      type: date
+    name: v1
     schema:
       openAPIV3Schema:
         description: DatabaseBackup은 DatabaseBackup API의 스키마

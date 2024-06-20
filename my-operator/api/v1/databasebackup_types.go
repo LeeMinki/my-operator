@@ -38,8 +38,12 @@ type DatabaseBackupStatus struct {
 	InProgress bool `json:"inProgress,omitempty"`
 }
 
-// +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
+//+kubebuilder:resource:shortName=dbb
+//+kubebuilder:printcolumn:name="Database",type=string,JSONPath=".spec.databaseName",description="The name of the database"
+//+kubebuilder:printcolumn:name="Schedule",type=string,JSONPath=".spec.schedule",description="Backup schedule"
+//+kubebuilder:printcolumn:name="Last Backup",type=date,JSONPath=".status.lastBackupTime",description="The last time the backup was run"
 
 // DatabaseBackup은 DatabaseBackup API의 스키마
 type DatabaseBackup struct {
