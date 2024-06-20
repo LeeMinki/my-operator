@@ -22,8 +22,7 @@
 
 ![image](https://github.com/LeeMinki/my-operator/assets/28076542/276b31e9-16c6-4c54-aff7-6d5661b2b5ad)
 
-<div hidden>
-```
+```puml
 @startuml
 skinparam componentStyle rectangle
 
@@ -77,7 +76,6 @@ package "Database Backup Process" {
 }
 @enduml
 ```
-</div>
 
 ## 과정
 
