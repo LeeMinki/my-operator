@@ -47,6 +47,9 @@ spec:
           status:
             description: 오퍼레이터가 관리하는 현재 상태 (status)를 포함
             properties:
+              inProgress:
+                description: 백업 진행여부 기록
+                type: boolean
               lastBackupTime:
                 description: 마지막 백업 시간이 기록
                 format: date-time

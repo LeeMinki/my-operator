@@ -34,6 +34,8 @@ type DatabaseBackupSpec struct {
 type DatabaseBackupStatus struct {
 	// 마지막 백업 시간이 기록
 	LastBackupTime metav1.Time `json:"lastBackupTime,omitempty"`
+	// 백업 진행여부 기록
+	InProgress bool `json:"inProgress,omitempty"`
 }
 
 // +kubebuilder:object:root=true

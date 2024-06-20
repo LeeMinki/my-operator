@@ -414,6 +414,8 @@ type DatabaseBackupSpec struct {
 type DatabaseBackupStatus struct {
 	// 마지막 백업 시간이 기록
 	LastBackupTime metav1.Time `json:"lastBackupTime,omitempty"`
+    // 백업 진행여부 기록
+    InProgress     bool        `json:"inProgress,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -477,36 +479,51 @@ type DatabaseBackupReconciler struct {
 
 // Reconcile 함수는 DatabaseBackup 객체의 상태를 읽고 변경 사항을 반영
 func (r *DatabaseBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
+    log := log.FromContext(ctx)
 
-	// DatabaseBackup 인스턴스를 가져옴
-	backup := &databasesv1.DatabaseBackup{}
-	err := r.Get(ctx, req.NamespacedName, backup)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// DatabaseBackup 리소스를 찾을 수 없는 경우, 삭제된 것으로 간주하고 처리하지 않음
-			return ctrl.Result{}, nil
-		}
-		// 리소스를 읽는 도중 에러가 발생한 경우, 재시도를 위해 에러를 반환
-		return ctrl.Result{}, err
-	}
+    // DatabaseBackup 인스턴스를 가져옴
+    backup := &databasesv1.DatabaseBackup{}
+    err := r.Get(ctx, req.NamespacedName, backup)
+    if err != nil {
+        if errors.IsNotFound(err) {
+            // DatabaseBackup 리소스를 찾을 수 없는 경우, 삭제된 것으로 간주하고 처리하지 않음
+            return ctrl.Result{}, nil
+        }
+        // 리소스를 읽는 도중 에러가 발생한 경우, 재시도를 위해 에러를 반환
+        return ctrl.Result{}, err
+    }
 
-	// 여기서 백업 로직을 구현
-	// 예를 들어, 백업 일정을 확인하고 백업을 수행
-	// 백업을 수행하는 가정하에 로그를 출력
-	fmt.Printf("Backing up database: %s\n", backup.Spec.DatabaseName)
+    // 백업 작업이 이미 진행 중인지 확인
+    if backup.Status.InProgress {
+        // 이미 백업 작업이 진행 중인 경우, 재시도하지 않음
+        return ctrl.Result{}, nil
+    }
 
-	// 현재 시간으로 마지막 백업 시간을 업데이트
-	backup.Status.LastBackupTime = metav1.Now()
-	err = r.Status().Update(ctx, backup)
-	if err != nil {
-		// 상태 업데이트에 실패한 경우, 에러를 로그에 기록하고 재시도를 위해 에러를 반환
-		log.Error(err, "Failed to update DatabaseBackup status")
-		return ctrl.Result{}, err
-	}
+    // 백업 작업을 시작할 때 InProgress 상태를 true로 설정
+    backup.Status.InProgress = true
+    // Update 시 ResourceVersion을 확인하여 상태 업데이트 일관성을 보장
+    latestBackup := backup.DeepCopy()
+    err = r.Status().Update(ctx, latestBackup)
+    if err != nil {
+        log.Error(err, "Failed to update DatabaseBackup status to InProgress")
+        return ctrl.Result{RequeueAfter: time.Minute * 1}, err
+    }
 
-	// 일정 시간 후에 다시 요청을 큐에 넣음 (예: 1분 후).
-	return ctrl.Result{RequeueAfter: time.Minute * 1}, nil
+    // 여기서 백업 로직을 구현
+    fmt.Printf("Backing up database: %s\n", backup.Spec.DatabaseName)
+
+    // 백업 작업이 완료되면 InProgress 상태를 false로 설정하고 LastBackupTime을 업데이트
+    latestBackup.Status.LastBackupTime = metav1.Now()
+    latestBackup.Status.InProgress = false
+    // Update 시 ResourceVersion을 확인하여 상태 업데이트 일관성을 보장
+    err = r.Status().Update(ctx, latestBackup)
+    if err != nil {
+        log.Error(err, "Failed to update DatabaseBackup status")
+        return ctrl.Result{RequeueAfter: time.Minute * 1}, err
+    }
+
+    // 일정 시간 후에 다시 요청을 큐에 넣음 (예: 1분 후).
+    return ctrl.Result{RequeueAfter: time.Minute * 1}, nil
 }
 
 // SetupWithManager 함수는 컨트롤러를 매니저에 등록
@@ -597,64 +614,19 @@ make install
 
 * 이 명령은 `config/crd` 디렉토리 내의 CRD 정의 파일들을 Kubernetes 클러스터에 적용
 
-#### 7.2. RBAC 설정 및 오퍼레이터 배포
+#### 7.2. 오퍼레이터 배포
 
 * RBAC(Role-Based Access Control) 설정을 통해 오퍼레이터가 필요한 권한을 가지도록 함
 
-##### 7.2.1. `config/rbac/role.yaml` 수정
-
-```yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: my-operator-manager-role
-rules:
-- apiGroups:
-  - databases.test.io
-  resources:
-  - databasebackups
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - databases.test.io
-  resources:
-  - databasebackups/status
-  verbs:
-  - get
-  - update
-  - patch
-```
-
-##### 7.2.2. `config/rbac/role_binding.yaml` 수정
-
-```yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: my-operator-manager-rolebinding
-subjects:
-- kind: ServiceAccount
-  name: my-operator-controller-manager
-  namespace: my-operator-system
-roleRef:
-  kind: ClusterRole
-  name: my-operator-manager-role
-  apiGroup: rbac.authorization.k8s.io
-```
-
-##### 7.2.3. RBAC 설정 적용
+#### 7.2.1. `make manifests` 실행
 
 ```bash
-kubectl apply -f config/rbac/
+make manifests
 ```
 
-##### 7.2.4. 오퍼레이터 배포
+* 얘가 RBAC 다 만들어 줌
+
+##### 7.2.2. 오퍼레이터 배포
 
 ```bash
 make deploy IMG=bbobbigul/my-operator:latest
@@ -695,9 +667,9 @@ kubectl apply -f config/samples/databases_v1_databasebackup.yaml
 * `DatabaseBackup` 리소스가 생성되고, 오퍼레이터가 이를 관리하는지 확인
 
 ```bash
-kubectl get databasebackups
-NAME                    AGE
-databasebackup-sample   16s
+kubectl get databasebackups -o custom-columns=NAME:.metadata.name,DATABASE:.spec.databaseName,SCHEDULE:.spec.schedule,LAST_BACKUP:.status.lastBackupTime
+NAME                    DATABASE     SCHEDULE      LAST_BACKUP
+databasebackup-sample   example-db   */5 * * * *   2024-06-20T08:17:52Z
 ```
 
 ##### 생성된 `DatabaseBackup` 리소스의 상태를 확인
@@ -715,15 +687,17 @@ Annotations:  <none>
 API Version:  databases.test.io/v1
 Kind:         DatabaseBackup
 Metadata:
-  Creation Timestamp:  2024-06-20T06:41:34Z
-  Generation:          2
-  Resource Version:    27760
-  UID:                 27a48b03-61b6-4280-b7d8-0ce16834b6ed
+  Creation Timestamp:  2024-06-20T08:20:30Z
+  Generation:          1
+  Resource Version:    37207
+  UID:                 9eb9a5c1-ae83-4288-862f-3c87c3856d13
 Spec:
   Backup Path:    /backups/example-db
   Database Name:  example-db
   Schedule:       */5 * * * *
-Events:           <none>
+Status:
+  Last Backup Time:  2024-06-20T08:20:31Z
+Events:              <none>
 ```
 
 #### 참고: 오퍼레이터 삭제를 원한다면
@@ -752,19 +726,6 @@ make undeploy
 
 ```bash
 kubectl -n my-operator-system logs deployment.apps/my-operator-controller-manager -c manager
-2024-06-20T07:27:39Z    INFO    setup   starting manager
-2024-06-20T07:27:39Z    INFO    starting server {"kind": "health probe", "addr": "[::]:8081"}
-2024-06-20T07:27:39Z    INFO    controller-runtime.metrics      Starting metrics server
-2024-06-20T07:27:39Z    INFO    controller-runtime.metrics      Serving metrics server  {"bindAddress": "127.0.0.1:8080", "secure": false}
-I0620 07:27:39.051395       1 leaderelection.go:250] attempting to acquire leader lease my-operator-system/830ca276.test.io...
-I0620 07:27:39.061349       1 leaderelection.go:260] successfully acquired lease my-operator-system/830ca276.test.io     
-2024-06-20T07:27:39Z    DEBUG   events  my-operator-controller-manager-544b8c7c57-5l46c_30d97e22-c942-45c4-b17a-f651245c26dc became leader       {"type": "Normal", "object": {"kind":"Lease","namespace":"my-operator-system","name":"830ca276.test.io","uid":"a1465721-4f72-48c9-9ca6-5aa2a119a05f","apiVersion":"coordination.k8s.io/v1","resourceVersion":"31205"}, "reason": "LeaderElection"}
-2024-06-20T07:27:39Z    INFO    Starting EventSource    {"controller": "databasebackup", "controllerGroup": "databases.test.io", "controllerKind": "DatabaseBackup", "source": "kind source: *v1.DatabaseBackup"}
-2024-06-20T07:27:39Z    INFO    Starting Controller     {"controller": "databasebackup", "controllerGroup": "databases.test.io", "controllerKind": "DatabaseBackup"}
-2024-06-20T07:27:39Z    INFO    Starting workers        {"controller": "databasebackup", "controllerGroup": "databases.test.io", "controllerKind": "DatabaseBackup", "worker count": 1}
-Backing up database: example-db
-Backing up database: example-db
-ming@DESKTOP-JGSTGU8:/mnt/c/Users/kai01/Desktop/bbobbigul/go/my-operator$ kubectl -n my-operator-system logs deployment.apps/my-operator-controller-manager -c manager
 2024-06-20T07:27:39Z    INFO    setup   starting manager
 2024-06-20T07:27:39Z    INFO    starting server {"kind": "health probe", "addr": "[::]:8081"}
 2024-06-20T07:27:39Z    INFO    controller-runtime.metrics      Starting metrics server

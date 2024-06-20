@@ -31,6 +31,9 @@ import (
 	databasesv1 "github.com/leeminki/my-operator/api/v1"
 )
 
+// +kubebuilder:rbac:groups=databases.test.io,resources=databasebackups,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=databases.test.io,resources=databasebackups/status,verbs=get;update;patch
+
 // DatabaseBackupReconciler는 DatabaseBackup 객체를 관리하는 컨트롤러
 type DatabaseBackupReconciler struct {
 	client.Client
@@ -53,18 +56,33 @@ func (r *DatabaseBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
+	// 백업 작업이 이미 진행 중인지 확인
+	if backup.Status.InProgress {
+		// 이미 백업 작업이 진행 중인 경우, 재시도하지 않음
+		return ctrl.Result{}, nil
+	}
+
+	// 백업 작업을 시작할 때 InProgress 상태를 true로 설정
+	backup.Status.InProgress = true
+	// Update 시 ResourceVersion을 확인하여 상태 업데이트 일관성을 보장
+	latestBackup := backup.DeepCopy()
+	err = r.Status().Update(ctx, latestBackup)
+	if err != nil {
+		log.Error(err, "Failed to update DatabaseBackup status to InProgress")
+		return ctrl.Result{RequeueAfter: time.Minute * 1}, err
+	}
+
 	// 여기서 백업 로직을 구현
-	// 예를 들어, 백업 일정을 확인하고 백업을 수행
-	// 백업을 수행하는 가정하에 로그를 출력
 	fmt.Printf("Backing up database: %s\n", backup.Spec.DatabaseName)
 
-	// 현재 시간으로 마지막 백업 시간을 업데이트
-	backup.Status.LastBackupTime = metav1.Now()
-	err = r.Status().Update(ctx, backup)
+	// 백업 작업이 완료되면 InProgress 상태를 false로 설정하고 LastBackupTime을 업데이트
+	latestBackup.Status.LastBackupTime = metav1.Now()
+	latestBackup.Status.InProgress = false
+	// Update 시 ResourceVersion을 확인하여 상태 업데이트 일관성을 보장
+	err = r.Status().Update(ctx, latestBackup)
 	if err != nil {
-		// 상태 업데이트에 실패한 경우, 에러를 로그에 기록하고 재시도를 위해 에러를 반환
 		log.Error(err, "Failed to update DatabaseBackup status")
-		return ctrl.Result{}, err
+		return ctrl.Result{RequeueAfter: time.Minute * 1}, err
 	}
 
 	// 일정 시간 후에 다시 요청을 큐에 넣음 (예: 1분 후).
